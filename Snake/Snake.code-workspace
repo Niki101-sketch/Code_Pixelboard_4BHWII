@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"name": "Snake",
+			"path": "."
+		}
+	],
+	"settings": {
+		"python-envs.defaultEnvManager": "ms-python.python:system"
+	}
+}
