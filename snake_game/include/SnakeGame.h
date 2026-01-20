@@ -4,35 +4,33 @@
 #include <Arduino.h>
 #include <FastLED.h>
 
-#define MAX_SNAKE_LENGTH 512 // 32 * 16 Pixel
+#define MAX_SNAKE_LENGTH 512
+#define MAX_FOOD 5 // Maximal 5 Futter-Pixel gleichzeitig
 
-struct Point {
-    int x;
-    int y;
-};
-
+struct Point { int x, y; };
 enum Direction { DIR_UP, DIR_DOWN, DIR_LEFT, DIR_RIGHT };
 
 class SnakeGame {
 public:
     SnakeGame(int width, int height);
-    void reset();
-    bool update(); // Rückgabe: false wenn Game Over
+    void reset(int foodCount);
+    bool update();
     void setDirection(Direction newDir);
-    Point getHead() { return body[0]; }
-    Point getFood() { return food; }
-    int getLength() { return length; }
+    
     Point* getBody() { return body; }
+    int getLength() { return length; }
+    Point* getFoodArray() { return foodItems; }
+    int getCurrentFoodCount() { return activeFoodCount; }
 
 private:
-    int boardWidth;
-    int boardHeight;
+    int boardWidth, boardHeight;
     Point body[MAX_SNAKE_LENGTH];
     int length;
     Direction currentDir;
-    Point food;
+    Point foodItems[MAX_FOOD];
+    int activeFoodCount;
 
-    void spawnFood();
+    void spawnFood(int index);
     bool isPointOnSnake(Point p);
 };
 
