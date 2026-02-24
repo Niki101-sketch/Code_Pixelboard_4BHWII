@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": "../../../../../../../../../UBI_Flutter-4BHWII"
+		},
+		{
+			"name": "Pixelboard-Zeitausgabe",
+			"path": ".."
+		},
+		{
+			"name": "Pixelboard-LED-Schrift",
+			"path": "../../Code_Pixelboard_4BHWII/Pixelboard-LED-Schrift"
+		}
+	],
+	"settings": {}
+}

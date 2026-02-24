@@ -322,8 +322,9 @@ static void updateUhrzeit() {
     Serial.println(F("FEHLER: getLocalTime() fehlgeschlagen!"));
     strcpy(uhrzeitString, "--:--");
   } else {
-    // Zeit formatieren als HH:MM
-    sprintf(uhrzeitString, "%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min);
+    // Zeit formatieren als HH:MM mit blinkendem Doppelpunkt (Sekundentakt)
+    char separator = (timeinfo.tm_sec % 2 == 0) ? ':' : ' ';
+    sprintf(uhrzeitString, "%02d%c%02d", timeinfo.tm_hour, separator, timeinfo.tm_min);
     
     // Detaillierte Zeit Ausgabe
     Serial.println(F("Zeit erfolgreich abgerufen:"));
