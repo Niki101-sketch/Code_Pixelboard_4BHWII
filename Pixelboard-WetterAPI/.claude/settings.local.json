@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cp -r \"c:/Users/rober/OneDrive - HTL Anichstrasse/HTL/4. Klasse/SPL/Programmieren/Code_Pixelboard_4BHWII/Pixelboard-LED-Schrift/lib/LEDMatrix-master\" \"c:/Users/rober/OneDrive - HTL Anichstrasse/HTL/4. Klasse/SPL/Programmieren/Code_Pixelboard_4BHWII/Pixelboard-WetterAPI/lib/\")",
+      "Bash(cp -r \"c:/Users/rober/OneDrive - HTL Anichstrasse/HTL/4. Klasse/SPL/Programmieren/Code_Pixelboard_4BHWII/Pixelboard-LED-Schrift/lib/LEDText-master\" \"c:/Users/rober/OneDrive - HTL Anichstrasse/HTL/4. Klasse/SPL/Programmieren/Code_Pixelboard_4BHWII/Pixelboard-WetterAPI/lib/\")",
+      "Bash(pio run:*)",
+      "Bash(where pio:*)",
+      "Bash(where platformio:*)",
+      "Read(//c/Users/rober/.platformio/penv/Scripts/**)",
+      "Bash(\"/c/Users/rober/.platformio/penv/Scripts/pio\" run:*)"
+    ]
+  }
+}
