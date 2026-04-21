@@ -1,22 +1,26 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 
-const char* ssid = "DEIN_WLAN";
-const char* password = "PASSWORT";
+const char* ssid = "SPL_ROBO_FrisB_2_4GHz";
+const char* password = "123456789";
 
 const char* mqtt_server = "broker.hivemq.com";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-void callback(char* topic, byte* payload, unsigned int length) {
-  String msg = "";
+bool subscribed = false;
 
+void callback(char* topic, byte* payload, unsigned int length) {
+  Serial.print("📩 Topic: ");
+  Serial.print(topic);
+  Serial.print(" | Nachricht: ");
+
+  String msg = "";
   for (int i = 0; i < length; i++) {
     msg += (char)payload[i];
   }
 
-  Serial.print("Empfangen: ");
   Serial.println(msg);
 }
 
@@ -26,7 +30,10 @@ void setup() {
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
+    Serial.println("WLAN...");
   }
+
+  Serial.println("WLAN OK");
 
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
@@ -34,15 +41,34 @@ void setup() {
 
 void reconnect() {
   while (!client.connected()) {
-    if (client.connect("ESP_EMPFAENGER")) {
-      client.subscribe("pixel/test");
+    Serial.println("MQTT verbinden...");
+
+    if (client.connect("ESP_EMPFAENGER_01")) {
+      Serial.println("MQTT verbunden ✔");
+
+      // NUR EINMAL SUBSCRIBE
+      if (!subscribed) {
+        subscribed = true;
+
+        if (client.subscribe("pixel/test")) {
+          Serial.println("Subscribed ✔");
+        } else {
+          Serial.println("Subscribe fehlgeschlagen ❌");
+        }
+      }
+
     } else {
-      delay(2000);
+      Serial.print("Fehler rc=");
+      Serial.println(client.state());
+      delay(3000);
     }
   }
 }
 
 void loop() {
-  if (!client.connected()) reconnect();
-  client.loop();
+  if (!client.connected()) {
+    reconnect();
+  }
+
+  client.loop(); // GANZ WICHTIG
 }
