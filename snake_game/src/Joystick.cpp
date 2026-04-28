@@ -32,11 +32,11 @@ int Joystick::getXRichtung() {
 
 int Joystick::getYRichtung() {
     int wert = analogRead(pinY);
-    
+
     if (wert < (center - deadzone)) {
-        return -1;  // Oben
+        return 1;   // Unten (Y-Achse physisch invertiert)
     } else if (wert > (center + deadzone)) {
-        return 1;   // Unten
+        return -1;  // Oben
     } else {
         return 0;   // Neutral
     }

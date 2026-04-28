@@ -1,8 +1,7 @@
 #include "SnakeGame.h"
 
-SnakeGame::SnakeGame(int width, int height) : boardWidth(width), boardHeight(height) {
-    // Initialisierung der Variablen
-    activeFoodCount = 1; 
+SnakeGame::SnakeGame(int width, int height) : boardWidth(width), boardHeight(height), wallWrap(false) {
+    activeFoodCount = 1;
     reset(1);
 }
 
@@ -74,11 +73,17 @@ bool SnakeGame::update() {
     else if (currentDir == DIR_LEFT) body[0].x--;
     else if (currentDir == DIR_RIGHT) body[0].x++;
 
-    // 3. Kollision mit dem WEISSEN RAND prüfen
-    // Da der Rand bei 0 und Max liegt, stirbt die Schlange dort
-    if (body[0].x <= 0 || body[0].x >= boardWidth - 1 || 
-        body[0].y <= 0 || body[0].y >= boardHeight - 1) {
-        return false; 
+    // 3. Kollision mit dem Rand prüfen (oder Wrap)
+    if (wallWrap) {
+        if (body[0].x <= 0) body[0].x = boardWidth - 2;
+        else if (body[0].x >= boardWidth - 1) body[0].x = 1;
+        if (body[0].y <= 0) body[0].y = boardHeight - 2;
+        else if (body[0].y >= boardHeight - 1) body[0].y = 1;
+    } else {
+        if (body[0].x <= 0 || body[0].x >= boardWidth - 1 ||
+            body[0].y <= 0 || body[0].y >= boardHeight - 1) {
+            return false;
+        }
     }
 
     // 4. Kollision mit eigenem Körper
@@ -90,6 +95,7 @@ bool SnakeGame::update() {
     for (int i = 0; i < activeFoodCount; i++) {
         if (body[0].x == foodItems[i].x && body[0].y == foodItems[i].y) {
             if (length < MAX_SNAKE_LENGTH) {
+                body[length] = body[length - 1]; // neues Segment an alter Schwanz-Position
                 length++;
             }
             spawnFood(i); // Nur diesen einen gefressenen Punkt neu spawnen

@@ -5,7 +5,7 @@
 #include <FastLED.h>
 
 #define MAX_SNAKE_LENGTH 512
-#define MAX_FOOD 5 // Maximal 5 Futter-Pixel gleichzeitig
+#define MAX_FOOD 8
 
 struct Point { int x, y; };
 enum Direction { DIR_UP, DIR_DOWN, DIR_LEFT, DIR_RIGHT };
@@ -16,14 +16,17 @@ public:
     void reset(int foodCount);
     bool update();
     void setDirection(Direction newDir);
-    
+    void setWallWrap(bool wrap) { wallWrap = wrap; }
+
     Point* getBody() { return body; }
     int getLength() { return length; }
     Point* getFoodArray() { return foodItems; }
     int getCurrentFoodCount() { return activeFoodCount; }
+    int getScore() { return length - 3; }
 
 private:
     int boardWidth, boardHeight;
+    bool wallWrap;
     Point body[MAX_SNAKE_LENGTH];
     int length;
     Direction currentDir;
