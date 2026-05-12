@@ -37,6 +37,12 @@ volatile bool isNewHighscore = false;
 volatile Direction nextDirection = DIR_RIGHT;
 JoystickRichtung   letzteMenueRichtung = NEUTRAL;
 
+volatile bool wechselAngefordert = false;
+
+TaskHandle_t hInput   = NULL;
+TaskHandle_t hGame    = NULL;
+TaskHandle_t hDisplay = NULL;
+
 const int MENU_Y[4] = {3, 6, 9, 12};
 
 // ─────────────────────────────────────────────────────────────
@@ -211,6 +217,12 @@ void taskInput(void *pvParameters) {
         else if (currentState == STATE_HIGHSCORE) {
             if (joy.wurdeGedrueckt()) currentState = STATE_MENU;
         }
+
+        // Langer Druck (>1s) → App-Wechsel anfordern
+        if (joy.wurdeLangeGedrueckt()) {
+            wechselAngefordert = true;
+        }
+
         vTaskDelay(pdMS_TO_TICKS(20));
     }
 }
@@ -241,6 +253,20 @@ void taskGameLogic(void *pvParameters) {
 void taskDisplay(void *pvParameters) {
     int blinkTick = 0;
     while (1) {
+        // App-Wechsel: weißer Wischeffekt → zurück zu Menü (Platzhalter)
+        if (wechselAngefordert) {
+            for (int x = 0; x < 32; x++) {
+                FastLED.clear();
+                for (int y = 0; y < 16; y++) setPixel(x, y, CRGB::White);
+                FastLED.show();
+                vTaskDelay(pdMS_TO_TICKS(20));
+            }
+            FastLED.clear();
+            FastLED.show();
+            currentState       = STATE_MENU;
+            wechselAngefordert = false;
+        }
+
         FastLED.clear();
         blinkTick++;
 
@@ -377,9 +403,9 @@ void setup() {
     // Startup-Animation (läuft einmalig beim Einschalten)
     runStartAnimation();
 
-    xTaskCreatePinnedToCore(taskInput,     "Input",   2048, NULL, 3, NULL, 1);
-    xTaskCreatePinnedToCore(taskGameLogic, "Game",    2048, NULL, 2, NULL, 1);
-    xTaskCreatePinnedToCore(taskDisplay,   "Display", 4096, NULL, 1, NULL, 0);
+    xTaskCreatePinnedToCore(taskInput,     "Input",   2048, NULL, 3, &hInput,   1);
+    xTaskCreatePinnedToCore(taskGameLogic, "Game",    2048, NULL, 2, &hGame,    1);
+    xTaskCreatePinnedToCore(taskDisplay,   "Display", 4096, NULL, 1, &hDisplay, 0);
 }
 
 void loop() {}
