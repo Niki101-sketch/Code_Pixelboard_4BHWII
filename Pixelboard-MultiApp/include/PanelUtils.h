@@ -14,8 +14,10 @@ using Canvas16  = cLEDMatrix<64, 16, HORIZONTAL_MATRIX>;
 //   - canvas16 nutzt die LEDText-Konvention y=0 = unten (y-up).
 //   - setPixel nutzt die Snake-Konvention y=0 = oben (y-down).
 // → vertikale Umrechnung mit (15 - y), keine horizontale Spiegelung.
-inline void blitCanvas16(Canvas16& c16) {
+// dxRight/dyUp verschieben das Bild optional (Pixel nach rechts / nach oben);
+// setPixel clippt am Rand, daher gefahrlos.
+inline void blitCanvas16(Canvas16& c16, int dxRight = 0, int dyUp = 0) {
     for (int y = 0; y < 16; y++)
         for (int x = 0; x < 32; x++)
-            setPixel(x, 15 - y, c16(x, y));
+            setPixel(x + dxRight, 15 - y - dyUp, c16(x, y));
 }

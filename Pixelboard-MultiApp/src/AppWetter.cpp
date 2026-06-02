@@ -49,12 +49,15 @@ static const uint8_t ICON_STORM[8] = {0x3C,0x7E,0xFF,0xFF,0x18,0x30,0x18,0x00};
 static const uint8_t ICON_FOG  [8] = {0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00};
 
 static CRGB getTempColor(float t) {
-    if (t <  0) return CRGB(0,   0,   255);
-    if (t <  5) return CRGB(0,   128, 255);
-    if (t < 15) return CRGB(0,   255, 255);
-    if (t < 22) return CRGB(255, 255, 0);
-    if (t < 28) return CRGB(255, 128, 0);
-    return              CRGB(255, 0,   0);
+    // Weicher Verlauf statt harter Stufen: kalt = blau, heiß = rot.
+    // Temperatur −5..35 °C wird auf den HSV-Farbton 160 (blau) → 0 (rot)
+    // gemappt; Zwischenwerte ergeben Cyan/Grün/Gelb/Orange.
+    const float tMin = -5.0f, tMax = 35.0f;
+    float f = (t - tMin) / (tMax - tMin);
+    if (f < 0.0f) f = 0.0f;
+    if (f > 1.0f) f = 1.0f;
+    uint8_t hue = (uint8_t)(160.0f * (1.0f - f));
+    return CHSV(hue, 255, 255);
 }
 static const uint8_t* selectIcon(int id) {
     if (id >= 200 && id < 300) return ICON_STORM;
@@ -104,9 +107,10 @@ static void fetchWeatherData() {
     weather.valid     = true;
 
     snprintf(tempBuffer, sizeof(tempBuffer), "%.0fC", weather.temp);
+    // Temperatur steht jetzt statisch (farbig) oben links → nicht mehr im Lauftext
     snprintf(scrollBuffer, sizeof(scrollBuffer),
-             "   %s  %.0fC  %s  Hum:%d%%  Wind:%.1fm/s   ",
-             weather.city, weather.temp, weather.description,
+             "   %s  %s  Hum:%d%%  Wind:%.1fm/s   ",
+             weather.city, weather.description,
              weather.humidity, weather.windSpeed);
     scrollText.SetText((unsigned char*)scrollBuffer, strlen(scrollBuffer));
     lastTempDisplayed = -999.0f;  // Text wurde geändert → neu rendern

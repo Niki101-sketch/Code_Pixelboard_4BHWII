@@ -41,7 +41,7 @@ static void updateUhrzeit() {
     uhrzeitText.UpdateText();
 
     scaleVertTo16();
-    blitCanvas16(canvas16);   // gleiche Ausrichtung wie Snake (setPixel)
+    blitCanvas16(canvas16, 1, 1);   // 1px nach rechts + 1px nach oben → mittig
     FastLED.show();
 }
 
