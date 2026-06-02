@@ -14,6 +14,10 @@
 #define JOY_X      33
 #define JOY_Y      32
 #define JOY_SW     14
+// Zweiter Joystick (gleichberechtigt, gleiche Funktion)
+#define JOY2_X     35
+#define JOY2_Y     34
+#define JOY2_SW    27
 
 // ─── WiFi / NTP ───────────────────────────────────────────────────────────────
 static const char* WIFI_SSID     = "iPhone von Paul";
@@ -24,8 +28,9 @@ static const char* NTP_SERVER    = "pool.ntp.org";
 CRGB ledsTop[256];    // Pin 25
 CRGB ledsBottom[256]; // Pin 26
 
-// ─── Joystick ─────────────────────────────────────────────────────────────────
-Joystick joy(JOY_X, JOY_Y, JOY_SW);
+// ─── Joysticks (beide gleichberechtigt) ──────────────────────────────────────
+Joystick joy (JOY_X,  JOY_Y,  JOY_SW);
+Joystick joy2(JOY2_X, JOY2_Y, JOY2_SW);
 
 // ─── App-Zustand ──────────────────────────────────────────────────────────────
 volatile AppID currentApp            = APP_SNAKE;
@@ -116,15 +121,26 @@ void taskManager(void *pvParameters) {
 void taskInput(void *pvParameters) {
     while (1) {
         joy.aktualisiere();
-        JoystickRichtung dir     = joy.getRichtung();
-        bool             pressed = joy.wurdeGedrueckt();
+        joy2.aktualisiere();
+
+        // Richtung: Joystick 1 hat Vorrang, sonst Joystick 2
+        JoystickRichtung dir = joy.getRichtung();
+        if (dir == NEUTRAL) dir = joy2.getRichtung();
+
+        // Beide Taster jeden Zyklus abfragen (Flanken-Erkennung braucht das),
+        // dann zu einem gemeinsamen Ereignis verodern.
+        bool pressed1 = joy.wurdeGedrueckt();
+        bool pressed2 = joy2.wurdeGedrueckt();
+        bool pressed  = pressed1 || pressed2;
 
         if (currentApp == APP_SNAKE) {
             snakeHandleInput(dir, pressed);
         }
         // Wetter + Uhrzeit brauchen keinen Joystick-Input
 
-        if (joy.wurdeLangeGedrueckt()) {
+        bool lang1 = joy.wurdeLangeGedrueckt();
+        bool lang2 = joy2.wurdeLangeGedrueckt();
+        if (lang1 || lang2) {
             appWechselAngefordert = true;
         }
 
