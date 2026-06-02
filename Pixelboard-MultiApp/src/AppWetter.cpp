@@ -22,9 +22,6 @@ static cLEDMatrix<64, 8,  HORIZONTAL_MATRIX> canvas8Top;
 static cLEDMatrix<64, 8,  HORIZONTAL_MATRIX> canvas8Bottom;
 static Canvas16 canvas16;
 
-static PanelMat panelTop;
-static PanelMat panelBottom;
-
 static cLEDText tempText;
 static cLEDText scrollText;
 
@@ -136,14 +133,11 @@ static void updateWetterDisplay() {
     }
 
     assembleCanvas16();
-    verschiebeEineZeileNachUnten(canvas16);
-    blitPanels(canvas16, panelTop, panelBottom);
+    blitCanvas16(canvas16);   // gleiche Ausrichtung wie Snake (setPixel)
     FastLED.show();
 }
 
 void wetterInit() {
-    panelTop.SetLEDArray(ledsBottom);
-    panelBottom.SetLEDArray(ledsTop);
     canvas8Top.SetLEDArray(canvas8TopLeds);
     canvas8Bottom.SetLEDArray(canvas8BottomLeds);
     canvas16.SetLEDArray(canvas16Leds);
@@ -166,15 +160,21 @@ void wetterInit() {
 }
 
 void taskWetter(void *pvParameters) {
-    fetchWeatherData();
-    unsigned long lastFetch = millis();
+    unsigned long lastFetch = 0;
+    bool          fetchedOnce = false;
 
     while (1) {
-        if (millis() - lastFetch > 600000UL) {
+        // Nur zeichnen/abrufen, wenn diese App aktiv ist – kein HTTP-Block beim
+        // Boot und keine Wetter-Frames im gemeinsamen LED-Puffer während Snake.
+        if (currentApp != APP_WETTER) { vTaskDelay(pdMS_TO_TICKS(50)); continue; }
+
+        updateWetterDisplay();   // sofortiges Bild ("Verbinde..." / letzte Daten)
+
+        if (!fetchedOnce || millis() - lastFetch > 600000UL) {
             fetchWeatherData();
-            lastFetch = millis();
+            lastFetch   = millis();
+            fetchedOnce = true;
         }
-        updateWetterDisplay();
         vTaskDelay(pdMS_TO_TICKS(50));
     }
 }

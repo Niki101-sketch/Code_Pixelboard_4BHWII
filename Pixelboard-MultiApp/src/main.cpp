@@ -28,7 +28,7 @@ CRGB ledsBottom[256]; // Pin 26
 Joystick joy(JOY_X, JOY_Y, JOY_SW);
 
 // ─── App-Zustand ──────────────────────────────────────────────────────────────
-AppID         currentApp             = APP_SNAKE;
+volatile AppID currentApp            = APP_SNAKE;
 volatile bool appWechselAngefordert  = false;
 bool          wifiOK                 = false;
 

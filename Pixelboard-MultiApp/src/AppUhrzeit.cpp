@@ -12,8 +12,6 @@ static CRGB canvas16Leds[64 * 16];
 
 static cLEDMatrix<64, 8, HORIZONTAL_MATRIX> canvas8;
 static Canvas16  canvas16;
-static PanelMat  panelTop;
-static PanelMat  panelBottom;
 
 static cLEDText uhrzeitText;
 static char     uhrzeitStr[6];
@@ -43,14 +41,11 @@ static void updateUhrzeit() {
     uhrzeitText.UpdateText();
 
     scaleVertTo16();
-    verschiebeEineZeileNachUnten(canvas16);
-    blitPanels(canvas16, panelTop, panelBottom);
+    blitCanvas16(canvas16);   // gleiche Ausrichtung wie Snake (setPixel)
     FastLED.show();
 }
 
 void uhrzeitInit() {
-    panelTop.SetLEDArray(ledsBottom);
-    panelBottom.SetLEDArray(ledsTop);
     canvas8.SetLEDArray(canvas8Leds);
     canvas16.SetLEDArray(canvas16Leds);
 
@@ -61,6 +56,9 @@ void uhrzeitInit() {
 
 void taskUhrzeit(void *pvParameters) {
     while (1) {
+        // Nur zeichnen, wenn diese App aktiv ist – verhindert, dass Uhr-Frames
+        // während Snake/Wetter in den gemeinsamen LED-Puffer geschrieben werden.
+        if (currentApp != APP_UHRZEIT) { vTaskDelay(pdMS_TO_TICKS(50)); continue; }
         updateUhrzeit();
         vTaskDelay(pdMS_TO_TICKS(50));
     }

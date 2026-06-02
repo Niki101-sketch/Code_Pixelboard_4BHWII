@@ -192,6 +192,10 @@ void taskSnakeLogic(void *pvParameters) {
 void taskSnakeDisplay(void *pvParameters) {
     int blinkTick = 0;
     while (1) {
+        // Nur zeichnen, wenn Snake aktiv ist – verhindert Fremd-Frames im
+        // gemeinsamen LED-Puffer beim Umschalten.
+        if (currentApp != APP_SNAKE) { vTaskDelay(pdMS_TO_TICKS(50)); continue; }
+
         FastLED.clear();
         blinkTick++;
 

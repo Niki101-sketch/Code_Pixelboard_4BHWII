@@ -10,7 +10,7 @@ extern CRGB ledsTop[256];    // Pin 25
 extern CRGB ledsBottom[256]; // Pin 26
 
 // ─── App-Zustand ──────────────────────────────────────────────────────────────
-extern AppID          currentApp;
+extern volatile AppID currentApp;
 extern volatile bool  appWechselAngefordert;
 extern bool           wifiOK;
 
