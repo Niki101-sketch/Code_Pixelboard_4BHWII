@@ -121,13 +121,15 @@ static void updateWetterDisplay() {
 
     fill_solid(canvas8TopLeds, 64 * 8, CRGB::Black);
 
-    // SetText/SetColor nur bei Temperaturänderung, UpdateText immer
+    // Farbe nur bei Temperaturänderung neu setzen. Den Text dagegen JEDEN Frame
+    // neu setzen: nach SetText rendert das erste UpdateText an Position 0 ohne
+    // zu scrollen → die Temperatur bleibt statisch stehen statt wegzulaufen.
     if (weather.temp != lastTempDisplayed) {
         lastTempDisplayed = weather.temp;
         CRGB tc = getTempColor(weather.temp);
         tempText.SetTextColrOptions(COLR_RGB | COLR_SINGLE, tc.r, tc.g, tc.b);
-        tempText.SetText((unsigned char*)tempBuffer, strlen(tempBuffer));
     }
+    tempText.SetText((unsigned char*)tempBuffer, strlen(tempBuffer));
     tempText.UpdateText();
 
     drawIcon(selectIcon(weather.weatherId), CRGB::White);
