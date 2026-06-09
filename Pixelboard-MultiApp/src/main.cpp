@@ -7,6 +7,7 @@
 #include "AppSnake.h"
 #include "AppWetter.h"
 #include "AppUhrzeit.h"
+#include "AppDHT22.h"
 
 // ─── Hardware ─────────────────────────────────────────────────────────────────
 #define PIN_TOP    25
@@ -42,6 +43,7 @@ TaskHandle_t hSnakeLogic   = NULL;
 TaskHandle_t hSnakeDisplay = NULL;
 TaskHandle_t hWetter       = NULL;
 TaskHandle_t hUhrzeit      = NULL;
+TaskHandle_t hDHT22        = NULL;
 
 // ─── LED-Mapping (32×16, identisch mit Snake-Projektion) ──────────────────────
 static int indexTop(int x, int y) {
@@ -70,6 +72,9 @@ static void suspendCurrentApp() {
         case APP_UHRZEIT:
             if (hUhrzeit) vTaskSuspend(hUhrzeit);
             break;
+        case APP_DHT22:
+            if (hDHT22) vTaskSuspend(hDHT22);
+            break;
         default: break;
     }
 }
@@ -86,6 +91,9 @@ static void resumeCurrentApp() {
             break;
         case APP_UHRZEIT:
             if (hUhrzeit) vTaskResume(hUhrzeit);
+            break;
+        case APP_DHT22:
+            if (hDHT22) vTaskResume(hDHT22);
             break;
         default: break;
     }
@@ -182,21 +190,24 @@ void setup() {
     finishWiFi();       // kurz nachwarten + NTP synchronisieren
     wetterInit();
     uhrzeitInit();
+    dht22Init();
 
     // Tasks erstellen
     // Core 0: Display-Tasks
     xTaskCreatePinnedToCore(taskSnakeDisplay, "SnakeDsp", 4096, NULL, 1, &hSnakeDisplay, 0);
     xTaskCreatePinnedToCore(taskWetter,       "Wetter",   8192, NULL, 1, &hWetter,       0);
     xTaskCreatePinnedToCore(taskUhrzeit,      "Uhrzeit",  4096, NULL, 1, &hUhrzeit,      0);
+    xTaskCreatePinnedToCore(taskDHT22,        "DHT22",    4096, NULL, 1, &hDHT22,        0);
 
     // Core 1: Logik-Tasks
     xTaskCreatePinnedToCore(taskSnakeLogic, "SnakeLog", 3072, NULL, 2, &hSnakeLogic, 1);
     xTaskCreatePinnedToCore(taskManager,    "Manager",  3072, NULL, 2, NULL,         1);
     xTaskCreatePinnedToCore(taskInput,      "Input",    2048, NULL, 3, NULL,         1);
 
-    // Wetter + Uhrzeit starten sofort suspended (Snake ist aktive App)
+    // Wetter + Uhrzeit + DHT22 starten sofort suspended (Snake ist aktive App)
     vTaskSuspend(hWetter);
     vTaskSuspend(hUhrzeit);
+    vTaskSuspend(hDHT22);
 }
 
 void loop() {}
