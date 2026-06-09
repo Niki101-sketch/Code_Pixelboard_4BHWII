@@ -31,6 +31,18 @@ static char tempBuffer  [8]   = "--C";
 static char scrollBuffer[48]  = "   Warte...   ";
 static float lastTempDisplayed = -999.0f;
 
+// ─── Thermometer-Icon (8×8) ───────────────────────────────────────────────────
+static const uint8_t ICON_THERMO[8] = {
+    0x18, 0x24, 0x24, 0x3C, 0x3C, 0x7E, 0x7E, 0x3C
+};
+static void drawThermoIcon(CRGB color) {
+    for (uint8_t y = 0; y < 8; y++)
+        for (uint8_t x = 0; x < 8; x++) {
+            bool on = (ICON_THERMO[y] >> (7 - x)) & 1;
+            canvas8Top(22 + x, y) = on ? color : CRGB::Black;
+        }
+}
+
 // ─── Farbverlauf Temperatur (blau = kalt, rot = warm) ────────────────────────
 static CRGB getTempColor(float t) {
     const float tMin = -5.0f, tMax = 35.0f;
@@ -51,7 +63,7 @@ static void sensorLesen() {
     dhtTemp = t;
     dhtHum  = h;
 
-    snprintf(tempBuffer,   sizeof(tempBuffer),   "%.0fC",             dhtTemp);
+    snprintf(tempBuffer,   sizeof(tempBuffer),   "%.1fC",             dhtTemp);
     snprintf(scrollBuffer, sizeof(scrollBuffer), "   Hum: %.0f%%   Temp: %.1f C   ", dhtHum, dhtTemp);
     scrollText.SetText((unsigned char*)scrollBuffer, strlen(scrollBuffer));
     lastTempDisplayed = -999.0f;  // Farbupdate erzwingen
@@ -77,6 +89,9 @@ static void updateDHT22Display() {
     }
     tempText.SetText((unsigned char*)tempBuffer, strlen(tempBuffer));
     tempText.UpdateText();
+
+    CRGB iconColor = isnan(dhtTemp) ? CRGB(0, 150, 255) : getTempColor(dhtTemp);
+    drawThermoIcon(iconColor);
 
     if (scrollText.UpdateText() == -1) {
         scrollText.SetText((unsigned char*)scrollBuffer, strlen(scrollBuffer));

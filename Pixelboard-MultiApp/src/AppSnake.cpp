@@ -1,6 +1,7 @@
 #include <Preferences.h>
 #include "AppSnake.h"
 #include "SnakeGame.h"
+#include "PixelFont.h"
 
 // ─── Spielfeld ────────────────────────────────────────────────────────────────
 #define BREITE 32
@@ -47,46 +48,10 @@ static CRGB getHeadColor() {
     }
 }
 
-// ─── 3×5 Pixel-Font ───────────────────────────────────────────────────────────
-static const uint8_t DIGIT_FONT[10][5] = {
-    {7,5,5,5,7}, // 0
-    {2,6,2,2,7}, // 1
-    {7,1,7,4,7}, // 2
-    {7,1,7,1,7}, // 3
-    {5,5,7,1,1}, // 4
-    {7,4,7,1,7}, // 5
-    {7,4,7,5,7}, // 6
-    {7,1,1,1,1}, // 7
-    {7,5,7,5,7}, // 8
-    {7,5,7,1,7}, // 9
-};
-static const uint8_t LETTER_S[5] = {7,4,7,1,7};
-static const uint8_t LETTER_H[5] = {5,5,7,5,5};
-
-static void drawChar(int x, int y, const uint8_t p[5], CRGB c) {
-    for (int r = 0; r < 5; r++) {
-        if (p[r] & 4) setPixel(x,     y + r, c);
-        if (p[r] & 2) setPixel(x + 1, y + r, c);
-        if (p[r] & 1) setPixel(x + 2, y + r, c);
-    }
-}
-static void drawDigit(int x, int y, int d, CRGB c) { drawChar(x, y, DIGIT_FONT[d], c); }
-static void drawColon(int x, int y, CRGB c) {
-    setPixel(x, y + 1, c);
-    setPixel(x, y + 3, c);
-}
-static void drawNumberRight(int y, int num, CRGB c) {
-    num = constrain(num, 0, 999);
-    int d[3]; int n = 0;
-    if (num >= 100) d[n++] = num / 100;
-    if (n > 0 || num >= 10) d[n++] = (num / 10) % 10;
-    d[n++] = num % 10;
-    int sx = 9 + (21 - (n * 4 - 1)) / 2;
-    for (int i = 0; i < n; i++) drawDigit(sx + i * 4, y, d[i], c);
-}
+// ─── 3×5 Pixel-Font → PixelFont.h ────────────────────────────────────────────
 static void drawNumberCenter(int y, int num, CRGB c) {
     num = constrain(num, 0, 9);
-    drawDigit((BREITE - 3) / 2, y, num, c);
+    pfDrawDigit((BREITE - 3) / 2, y, num, c);
 }
 static void drawBorder() {
     for (int x = 0; x < 32; x++) { setPixel(x, 0, CRGB::White); setPixel(x, 15, CRGB::White); }
@@ -274,16 +239,16 @@ void taskSnakeDisplay(void *pvParameters) {
                 setPixel(x, 0,  CRGB::White);
                 setPixel(x, 15, CRGB::White);
             }
-            drawChar(1, 2, LETTER_S, CRGB::Yellow);
-            drawColon(5, 2, CRGB::Yellow);
-            drawNumberRight(2, currentScore, CRGB::Yellow);
+            pfDrawChar(1, 2, PF_S, CRGB::Yellow);
+            pfDrawColon(5, 2, CRGB::Yellow);
+            pfDrawNumberRight(2, currentScore, CRGB::Yellow);
 
             for (int x = 2; x < 30; x += 2) setPixel(x, 8, CRGB(22, 22, 22));
 
             CRGB hc = (isNewHighscore && (blinkTick % 16 < 8)) ? CRGB::Gold : CRGB::Cyan;
-            drawChar(1, 9, LETTER_H, hc);
-            drawColon(5, 9, hc);
-            drawNumberRight(9, highScore, hc);
+            pfDrawChar(1, 9, PF_H, hc);
+            pfDrawColon(5, 9, hc);
+            pfDrawNumberRight(9, highScore, hc);
 
             if (blinkTick % 20 < 10) setPixel(16, 14, CRGB::White);
         }
