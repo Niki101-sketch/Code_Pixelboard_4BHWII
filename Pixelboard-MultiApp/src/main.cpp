@@ -2,6 +2,8 @@
 #include <FastLED.h>
 #include <WiFi.h>
 #include <time.h>
+#include "soc/soc.h"            // Brownout-Detektor (Standalone-Betrieb am Netzteil)
+#include "soc/rtc_cntl_reg.h"
 #include "Shared.h"
 #include "Joystick.h"
 #include "PixelFont.h"
@@ -249,17 +251,22 @@ static void startWiFi() {
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 }
 
-static void finishWiFi() {
-    for (int i = 0; i < 10 && WiFi.status() != WL_CONNECTED; i++) delay(500);
-    wifiOK = (WiFi.status() == WL_CONNECTED);
-    if (!wifiOK) return;
-    configTime(3600, 3600, NTP_SERVER);
-    struct tm t;
-    for (int i = 0; i < 10 && !getLocalTime(&t); i++) delay(500);
+// Wartet im Hintergrund auf die Verbindung und synchronisiert dann die Zeit.
+// So blockiert der Boot NICHT auf das WLAN – ohne Netz (z.B. nur Netzteil) laufen
+// Snake/Pacman/DHT22 sofort; Uhrzeit/Wetter aktualisieren sich, sobald verbunden.
+static void taskWiFi(void *pvParameters) {
+    while (WiFi.status() != WL_CONNECTED) vTaskDelay(pdMS_TO_TICKS(500));
+    wifiOK = true;                          // verbunden -> Wetter darf abrufen
+    configTime(3600, 3600, NTP_SERVER);     // Zeit synchronisieren (für Uhrzeit)
+    vTaskDelete(NULL);
 }
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
 void setup() {
+    // Brownout-Detektor abschalten: verhindert Reset-Schleifen durch kurze
+    // Spannungseinbrüche (WiFi-Funkpeak + LED-Strom) an schwächeren Netzteilen.
+    WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
+
     // Mutex VOR allen Ausgaben/Tasks erzeugen (snakeInit() zeigt schon Frames).
     ledMutex = xSemaphoreCreateMutex();
 
@@ -270,11 +277,13 @@ void setup() {
 
     startWiFi();
     snakeInit();
-    finishWiFi();
     wetterInit();
     uhrzeitInit();
     dht22Init();
     pacmanInit();
+
+    // WLAN/NTP im Hintergrund verbinden (blockiert den Start nicht)
+    xTaskCreatePinnedToCore(taskWiFi, "WiFi", 4096, NULL, 1, NULL, 0);
 
     // Core 0: Display-Tasks
     xTaskCreatePinnedToCore(taskSnakeDisplay, "SnakeDsp", 4096, NULL, 1, &hSnakeDisplay, 0);
