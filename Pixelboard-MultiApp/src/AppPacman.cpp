@@ -392,10 +392,10 @@ void taskPacmanDisplay(void *pvParameters) {
             for (int f = 0; f < 4; f++) {
                 fill_solid(ledsTop,    256, CRGB::Red);
                 fill_solid(ledsBottom, 256, CRGB::Red);
-                FastLED.show();
+                showLeds();
                 vTaskDelay(pdMS_TO_TICKS(180));
                 FastLED.clear();
-                FastLED.show();
+                showLeds();
                 vTaskDelay(pdMS_TO_TICKS(130));
             }
             if (newHighscore) pacPrefs.putInt("hs", pacHighScore);
@@ -409,7 +409,7 @@ void taskPacmanDisplay(void *pvParameters) {
             pfDrawChar(1, 9, PF_H, hc);
             pfDrawColon(5, 9, hc);
             pfDrawNumberRight(9, pacHighScore, hc);
-            FastLED.show();
+            showLeds();
             // Warten bis Taster gedrückt (durch pacmanHandleInput)
             while (pacState == PAC_GAMEOVER) vTaskDelay(pdMS_TO_TICKS(50));
             continue;
@@ -420,10 +420,10 @@ void taskPacmanDisplay(void *pvParameters) {
             for (int f = 0; f < 4; f++) {
                 fill_solid(ledsTop,    256, CRGB::Green);
                 fill_solid(ledsBottom, 256, CRGB::Green);
-                FastLED.show();
+                showLeds();
                 vTaskDelay(pdMS_TO_TICKS(180));
                 FastLED.clear();
-                FastLED.show();
+                showLeds();
                 vTaskDelay(pdMS_TO_TICKS(130));
             }
             if (newHighscore) pacPrefs.putInt("hs", pacHighScore);
@@ -436,12 +436,12 @@ void taskPacmanDisplay(void *pvParameters) {
             pfDrawChar(1, 9, PF_H, hc2);
             pfDrawColon(5, 9, hc2);
             pfDrawNumberRight(9, pacHighScore, hc2);
-            FastLED.show();
+            showLeds();
             while (pacState == PAC_WIN) vTaskDelay(pdMS_TO_TICKS(50));
             continue;
         }
 
-        FastLED.show();
+        showLeds();
         vTaskDelay(pdMS_TO_TICKS(33));
     }
 }

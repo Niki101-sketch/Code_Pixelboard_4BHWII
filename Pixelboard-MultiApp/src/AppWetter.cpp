@@ -140,7 +140,7 @@ static void updateWetterDisplay() {
 
     assembleCanvas16();
     blitCanvas16(canvas16);   // gleiche Ausrichtung wie Snake (setPixel)
-    FastLED.show();
+    showLeds();
 }
 
 void wetterInit() {

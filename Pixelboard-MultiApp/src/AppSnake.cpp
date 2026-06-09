@@ -77,12 +77,12 @@ static void runStartAnimation() {
             uint8_t b = (uint8_t)max(0, 210 - t * 26);
             setPixel(bx[pos], by[pos], (t == 0) ? CRGB::Lime : CRGB(0, b, 0));
         }
-        FastLED.show();
+        showLeds();
         delay(16);
     }
     delay(120);
     FastLED.clear();
-    FastLED.show();
+    showLeds();
 }
 
 // ─── Öffentliche Schnittstelle ────────────────────────────────────────────────
@@ -193,12 +193,12 @@ void taskSnakeDisplay(void *pvParameters) {
                 int barLen = (num - 1) * 10;
                 for (int x = 0; x < barLen; x++)
                     setPixel(1 + x, 14, CRGB(0, 80, 0));
-                FastLED.show();
+                showLeds();
                 vTaskDelay(pdMS_TO_TICKS(750));
             }
             fill_solid(ledsTop,    256, CRGB::Green);
             fill_solid(ledsBottom, 256, CRGB::Green);
-            FastLED.show();
+            showLeds();
             vTaskDelay(pdMS_TO_TICKS(180));
             currentState = STATE_PLAYING;
             continue;  // kein FastLED.show() mit leerem Buffer am Loop-Ende
@@ -223,10 +223,10 @@ void taskSnakeDisplay(void *pvParameters) {
             for (int f = 0; f < 4; f++) {
                 fill_solid(ledsTop,    256, col);
                 fill_solid(ledsBottom, 256, col);
-                FastLED.show();
+                showLeds();
                 vTaskDelay(pdMS_TO_TICKS(180));
                 FastLED.clear();
-                FastLED.show();
+                showLeds();
                 vTaskDelay(pdMS_TO_TICKS(130));
             }
             if (isNewHighscore) prefs.putInt("hs", highScore);
@@ -253,7 +253,7 @@ void taskSnakeDisplay(void *pvParameters) {
             if (blinkTick % 20 < 10) setPixel(16, 14, CRGB::White);
         }
 
-        FastLED.show();
+        showLeds();
         vTaskDelay(pdMS_TO_TICKS(33));
     }
 }

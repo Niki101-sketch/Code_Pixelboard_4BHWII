@@ -30,6 +30,9 @@ static const char* NTP_SERVER    = "pool.ntp.org";
 CRGB ledsTop[256];
 CRGB ledsBottom[256];
 
+// ─── LED-Ausgabe-Mutex (siehe Shared.h / showLeds()) ──────────────────────────
+SemaphoreHandle_t ledMutex = NULL;
+
 // ─── Joysticks ────────────────────────────────────────────────────────────────
 Joystick joy (JOY_X,  JOY_Y,  JOY_SW);
 // joy2 ist gespiegelt verdrahtet -> beide Achsen invertieren
@@ -71,6 +74,9 @@ void setPixel(int x, int y, CRGB f) {
 
 // ─── App suspend/resume ───────────────────────────────────────────────────────
 static void suspendCurrentApp() {
+    // Mutex zuerst holen: so kann der Display-Task niemals mitten in
+    // FastLED.show() suspendiert werden (das würde die RMT-Ausgabe blockieren).
+    if (ledMutex) xSemaphoreTake(ledMutex, portMAX_DELAY);
     switch (currentApp) {
         case APP_SNAKE:
             if (hSnakeLogic)   vTaskSuspend(hSnakeLogic);
@@ -90,6 +96,7 @@ static void suspendCurrentApp() {
             break;
         default: break;
     }
+    if (ledMutex) xSemaphoreGive(ledMutex);
 }
 
 static void resumeCurrentApp() {
@@ -172,7 +179,7 @@ void taskManager(void *pvParameters) {
                 menuSelectedApp = (AppID)(((int)menuSelectedApp + 1) % APP_COUNT);
             }
             drawAppMenu();
-            FastLED.show();
+            showLeds();
 
             if (menuConfirm) {
                 menuConfirm = false;
@@ -182,11 +189,11 @@ void taskManager(void *pvParameters) {
                 for (int x = 0; x < 32; x++) {
                     FastLED.clear();
                     for (int y = 0; y < 16; y++) setPixel(x, y, APP_COLORS[currentApp]);
-                    FastLED.show();
+                    showLeds();
                     vTaskDelay(pdMS_TO_TICKS(15));
                 }
                 FastLED.clear();
-                FastLED.show();
+                showLeds();
                 vTaskDelay(pdMS_TO_TICKS(60));
                 resumeCurrentApp();
             }
@@ -253,6 +260,9 @@ static void finishWiFi() {
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
 void setup() {
+    // Mutex VOR allen Ausgaben/Tasks erzeugen (snakeInit() zeigt schon Frames).
+    ledMutex = xSemaphoreCreateMutex();
+
     FastLED.addLeds<WS2812, PIN_TOP,    GRB>(ledsTop,    256);
     FastLED.addLeds<WS2812, PIN_BOTTOM, GRB>(ledsBottom, 256);
     FastLED.setBrightness(25);

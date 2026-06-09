@@ -99,7 +99,7 @@ static void updateDHT22Display() {
 
     assembleCanvas16();
     blitCanvas16(canvas16);
-    FastLED.show();
+    showLeds();
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────

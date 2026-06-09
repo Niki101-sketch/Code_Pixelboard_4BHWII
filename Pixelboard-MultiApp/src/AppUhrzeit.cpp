@@ -42,7 +42,7 @@ static void updateUhrzeit() {
 
     scaleVertTo16();
     blitCanvas16(canvas16, 1, 1);   // 1px nach rechts + 1px nach oben → mittig
-    FastLED.show();
+    showLeds();
 }
 
 void uhrzeitInit() {
