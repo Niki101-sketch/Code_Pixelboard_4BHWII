@@ -32,7 +32,8 @@ CRGB ledsBottom[256];
 
 // ─── Joysticks ────────────────────────────────────────────────────────────────
 Joystick joy (JOY_X,  JOY_Y,  JOY_SW);
-Joystick joy2(JOY2_X, JOY2_Y, JOY2_SW);
+// joy2 ist gespiegelt verdrahtet -> beide Achsen invertieren
+Joystick joy2(JOY2_X, JOY2_Y, JOY2_SW, 1000, 2048, true, true);
 
 // ─── App-Zustand ──────────────────────────────────────────────────────────────
 volatile AppID currentApp           = APP_SNAKE;

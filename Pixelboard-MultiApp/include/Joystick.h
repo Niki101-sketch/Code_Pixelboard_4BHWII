@@ -16,8 +16,11 @@ enum JoystickRichtung {
 class Joystick : public EntprellterTaster {
 public:
     // Konstruktor
-    Joystick(int pinX, int pinY, int pinButton, 
-             int deadzoneWert = 1000, int centerWert = 2048);
+    // invertX/invertY: kehren die jeweilige Achsenrichtung um (z.B. wenn ein
+    // Joystick anders verdrahtet/eingebaut ist als der andere)
+    Joystick(int pinX, int pinY, int pinButton,
+             int deadzoneWert = 1000, int centerWert = 2048,
+             bool invertX = false, bool invertY = false);
 
     // Methode zum Aktualisieren - MUSS regelmäßig aufgerufen werden!
     void aktualisiere();
@@ -47,6 +50,8 @@ private:
     const int pinY;
     const int deadzone;
     const int center;
+    const bool invertX;
+    const bool invertY;
 
     int letzteXRichtung;
     int letzteYRichtung;

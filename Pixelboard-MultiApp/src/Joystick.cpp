@@ -1,12 +1,15 @@
 #include "Joystick.h"
 
 // Konstruktor
-Joystick::Joystick(int pinX, int pinY, int pinButton, int deadzoneWert, int centerWert)
+Joystick::Joystick(int pinX, int pinY, int pinButton, int deadzoneWert, int centerWert,
+                   bool invertX, bool invertY)
     : EntprellterTaster(pinButton),
-      pinX(pinX), 
-      pinY(pinY), 
-      deadzone(deadzoneWert), 
+      pinX(pinX),
+      pinY(pinY),
+      deadzone(deadzoneWert),
       center(centerWert),
+      invertX(invertX),
+      invertY(invertY),
       letzteXRichtung(0),
       letzteYRichtung(0) {
     
@@ -20,26 +23,32 @@ void Joystick::aktualisiere() {
 
 int Joystick::getXRichtung() {
     int wert = analogRead(pinX);
-    
+    int richtung;
+
     if (wert < (center - deadzone)) {
-        return -1;  // Links
+        richtung = -1;  // Links
     } else if (wert > (center + deadzone)) {
-        return 1;   // Rechts
+        richtung = 1;   // Rechts
     } else {
-        return 0;   // Neutral
+        richtung = 0;   // Neutral
     }
+
+    return invertX ? -richtung : richtung;
 }
 
 int Joystick::getYRichtung() {
     int wert = analogRead(pinY);
+    int richtung;
 
     if (wert < (center - deadzone)) {
-        return 1;   // Unten (Y-Achse physisch invertiert)
+        richtung = 1;   // Unten (Y-Achse physisch invertiert)
     } else if (wert > (center + deadzone)) {
-        return -1;  // Oben
+        richtung = -1;  // Oben
     } else {
-        return 0;   // Neutral
+        richtung = 0;   // Neutral
     }
+
+    return invertY ? -richtung : richtung;
 }
 
 bool Joystick::istLinks() {
