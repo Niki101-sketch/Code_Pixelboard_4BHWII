@@ -6,25 +6,27 @@
 #define PM_W 32
 #define PM_H 16
 
-// W=Wand, .=Dot — jede Zeile exakt 32 Zeichen (alle Längen verifiziert)
-// Geisterhaus Reihen 6-8, x=11-20. Ausgänge bei x=14 und x=17.
+// Abwechslungsreiches, ASYMMETRISCHES Labyrinth mit durchgehend 1 Feld breiten
+// Gängen und OHNE SACKGASSEN (jede Zelle hat >=2 Ausgänge -> viele Schleifen/Wege).
+// Per tools/genmaze.py (seed 7) erzeugt + validiert: keine 2×2-Flächen, keine
+// Sackgassen, voll verbunden. Geister starten frei auf zentralen Feldern (kein Pen).
 static const char MAZE[PM_H][PM_W + 1] = {
-    "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",  // row  0: 32W
-    "W..............................W",   // row  1: 1+30+1=32
-    "W.WWWWWWWWWWW......WWWWWWWWWWW.W",  // row  2: 1+1+11+6+11+1+1=32
-    "W..............................W",   // row  3: 1+30+1=32
-    "W.WWWWWWWWWWW......WWWWWWWWWWW.W",  // row  4: same as row 2
-    "W...W..........WW..........W...W",  // row  5: 1+3+1+10+2+10+1+3+1=32
-    "W..........WWW.WW.WWW..........W",  // row  6: 1+10+3+1+2+1+3+10+1=32
-    "W..........W........W..........W",  // row  7: 1+10+1+8+1+10+1=32
-    "W..........WWW.WW.WWW..........W",  // row  8: same as row 6
-    "W...W..........WW..........W...W",  // row  9: same as row 5
-    "W.WWWWWWWWWWW......WWWWWWWWWWW.W",  // row 10: same as row 2
-    "W..............................W",   // row 11: 1+30+1=32
-    "W.WWWWWWWWWWW......WWWWWWWWWWW.W",  // row 12: same as row 2
-    "W..............................W",   // row 13: 1+30+1=32
-    "W..............................W",   // row 14: 1+30+1=32
-    "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",  // row 15: 32W
+    "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+    "W.........W...............W...WW",
+    "W.W.WWWWW.W.WWWWWWWWW.W.W.W.W.WW",
+    "W...W...W.W.....W...W.W.W.....WW",
+    "WWWWW.W.W.W.WWW.W.W.W.W.WWWWW.WW",
+    "W.....W.....W...W...W.W.W...W.WW",
+    "W.WWWWW.WWW.W.W.W.W.W.W.W.W.W.WW",
+    "W.............W.W.W.....W.....WW",
+    "W.WWWWWWWWWWWWW.W.W.WWWWWWW.W.WW",
+    "W.W.............W...W.......W.WW",
+    "W.W.W.W.W.WWWWW.W.W.W.W.WWW.W.WW",
+    "W.......W.........W.W.W...W.W.WW",
+    "W.W.WWW.WWWWWWWWW.W.W.W.W.W.W.WW",
+    "W.................W.....W.....WW",
+    "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+    "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
 };
 
 static inline bool isWall(int x, int y) {
@@ -39,20 +41,23 @@ struct Ghost {
     int x, y;
     PacDir dir;
     bool scared;
-    bool eaten;     // kurz unsichtbar nach Fressen
+    bool eaten;          // unterwegs als Augen zurück ins Haus
     uint32_t eatenTimer;
+    bool forceReverse;   // bei Moduswechsel einmalig umkehren (klassisch)
 };
 
-static const int GHOST_COUNT = 2;
-static const int GHOST_HOME_X[2] = {14, 17};
-static const int GHOST_HOME_Y    = 7;
+static const int  GHOST_COUNT     = 2;
+static const int  GHOST_HOME_X[2] = {13, 17};   // zentrale Startfelder (kein Pen)
+static const int  GHOST_HOME_Y    = 7;
 static const CRGB GHOST_COLORS[2] = { CRGB::Red, CRGB::Cyan };
 
-// Dot-Map (1 Bit pro Zelle, true = Dot noch vorhanden)
+static const int PAC_START_X = 15;
+static const int PAC_START_Y = 13;
+
+// Dot-Map (true = Dot noch vorhanden)
 static bool dots[PM_H][PM_W];
 static int8_t powerPellets[4][2]; // [idx][0=x, 1=y], -1 = gefressen
-
-static const int PP_POS[4][2] = {{1,1},{30,1},{1,13},{30,13}};
+static const int PP_POS[4][2] = {{1,1},{29,1},{1,13},{29,13}};
 
 static int  pacX, pacY;
 static PacDir pacDir, pacNextDir;
@@ -61,46 +66,62 @@ static int  pacHighScore       = 0;
 static int  totalDots          = 0;
 static int  dotsEaten          = 0;
 static bool newHighscore       = false;
+static int  ghostChain         = 0;   // gefressene Geister je Power-Pellet (Verdopplung)
 
 static Ghost ghosts[GHOST_COUNT];
 
+// ─── Geschwindigkeit & Modus ───────────────────────────────────────────────────
+// pacUpdate() wird alle LOGIC_TICK_MS aufgerufen. Pacman zieht jeden Tick; Geister
+// ziehen je nach Zustand seltener -> verängstigte Geister sind langsam = fangbar.
+#define LOGIC_TICK_MS  135       // Grundtakt (höher = langsameres Gameplay)
+#define FRIGHT_MS      7000UL    // Dauer "verängstigt" nach Power-Pellet
+#define SCATTER_MS     5000UL    // Streu-Phase (Geister zu den Ecken)
+#define CHASE_MS       18000UL   // Jagd-Phase
+
+static uint32_t gameTick    = 0;
 static uint32_t scaredTimer = 0;
-static bool anyScared       = false;
+static bool     anyScared   = false;
+
+enum GhostMode { MODE_SCATTER, MODE_CHASE };
+static GhostMode globalMode  = MODE_SCATTER;
+static uint32_t  modeStartMs = 0;
 
 static Preferences pacPrefs;
 
 enum PacState { PAC_MENU, PAC_PLAYING, PAC_GAMEOVER, PAC_WIN };
 static volatile PacState pacState = PAC_MENU;
 
+// ─── Helfer ─────────────────────────────────────────────────────────────────────
+static bool canMove(int x, int y) { return !isWall(x, y); }
+
+static int isPowerPellet(int x, int y) {
+    for (int i = 0; i < 4; i++)
+        if (powerPellets[i][0] == x && powerPellets[i][1] == y) return i;
+    return -1;
+}
+
 // ─── Maze-Reset: alle Dots setzen ────────────────────────────────────────────
 static void resetDots() {
-    totalDots  = 0;
-    dotsEaten  = 0;
+    totalDots = 0;
+    dotsEaten = 0;
     for (int y = 0; y < PM_H; y++)
         for (int x = 0; x < PM_W; x++)
             dots[y][x] = false;
 
-    // Dots auf allen freien (Nicht-Wand) Zellen außer Geisterhaus-Inneres
     for (int y = 1; y < PM_H - 1; y++) {
         for (int x = 1; x < PM_W - 1; x++) {
             if (!isWall(x, y)) {
-                // Geisterhaus-Inneres (rows 6-8, cols 12-19) leer lassen
-                bool inGhostHouse = (y >= 6 && y <= 8 && x >= 12 && x <= 19);
-                if (!inGhostHouse) {
-                    dots[y][x] = true;
-                    totalDots++;
-                }
+                dots[y][x] = true;
+                totalDots++;
             }
         }
     }
-    // Power-Pellets registrieren (überschreiben einen Dot)
     for (int i = 0; i < 4; i++) {
         powerPellets[i][0] = PP_POS[i][0];
         powerPellets[i][1] = PP_POS[i][1];
     }
 }
 
-// ─── Geister initialisieren ───────────────────────────────────────────────────
 static void resetGhosts() {
     for (int i = 0; i < GHOST_COUNT; i++) {
         ghosts[i].x = GHOST_HOME_X[i];
@@ -108,171 +129,212 @@ static void resetGhosts() {
         ghosts[i].dir = (i == 0) ? PDIR_LEFT : PDIR_RIGHT;
         ghosts[i].scared = false;
         ghosts[i].eaten  = false;
-        ghosts[i].eatenTimer = 0;
+        ghosts[i].eatenTimer  = 0;
+        ghosts[i].forceReverse = false;
     }
-    anyScared = false;
+    anyScared   = false;
     scaredTimer = 0;
+    globalMode  = MODE_SCATTER;
+    modeStartMs = millis();
 }
 
-// ─── Spielfeld-Reset ──────────────────────────────────────────────────────────
 static void resetGame() {
-    pacX    = 15;
-    pacY    = 11;
-    pacDir  = PDIR_RIGHT;
-    pacNextDir = PDIR_RIGHT;
-    pacScore = 0;
+    pacX = PAC_START_X;
+    pacY = PAC_START_Y;
+    pacDir     = PDIR_LEFT;
+    pacNextDir = PDIR_LEFT;
+    pacScore   = 0;
     newHighscore = false;
+    ghostChain = 0;
+    gameTick   = 0;
     resetDots();
     resetGhosts();
     pacState = PAC_PLAYING;
 }
 
-// ─── Hilfsfunktion: ist Zelle begehbar? ───────────────────────────────────────
-static bool canMove(int x, int y) {
-    return !isWall(x, y);
-}
-
-// ─── Power-Pellet an Position? ───────────────────────────────────────────────
-static int isPowerPellet(int x, int y) {
-    for (int i = 0; i < 4; i++)
-        if (powerPellets[i][0] == x && powerPellets[i][1] == y) return i;
-    return -1;
-}
-
-// ─── Ghost-KI ─────────────────────────────────────────────────────────────────
-static void moveGhost(Ghost &g) {
-    if (g.eaten) return;
-
+// ─── Geist-Ziel (klassische Persönlichkeiten) ─────────────────────────────────
+static void ghostTarget(int gi, int &tx, int &ty) {
+    Ghost &g = ghosts[gi];
+    if (g.eaten) {                       // gefressen -> heim ins Haus
+        tx = GHOST_HOME_X[gi]; ty = GHOST_HOME_Y; return;
+    }
+    if (globalMode == MODE_SCATTER) {    // Streuphase -> eigene Ecke
+        if (gi == 0) { tx = PM_W - 2; ty = 1; }   // rot: oben rechts
+        else         { tx = 1;        ty = 1; }   // cyan: oben links
+        return;
+    }
+    // Jagdphase
     int dx[4] = {-1, 1, 0, 0};
     int dy[4] = { 0, 0,-1, 1};
-    PacDir opp[4] = {PDIR_RIGHT, PDIR_LEFT, PDIR_DOWN, PDIR_UP};
-
-    // Mögliche Richtungen sammeln (keine Wand, nicht rückwärts)
-    PacDir choices[4];
-    int    nChoices = 0;
-    for (int d = 0; d < 4; d++) {
-        if (d == (int)opp[g.dir]) continue;
-        int nx = g.x + dx[d];
-        int ny = g.y + dy[d];
-        if (canMove(nx, ny)) choices[nChoices++] = (PacDir)d;
+    if (gi == 0) {                       // "Blinky": direkt auf Pacman
+        tx = pacX; ty = pacY;
+    } else {                             // "Pinky": 4 Felder vor Pacman (Hinterhalt)
+        tx = pacX + dx[(int)pacDir] * 4;
+        ty = pacY + dy[(int)pacDir] * 4;
     }
-    if (nChoices == 0) {
-        // Sackgasse → umdrehen
-        int d = (int)opp[g.dir];
-        g.x += dx[d]; g.y += dy[d];
-        g.dir = (PacDir)d;
+}
+
+// ─── Modus Scatter/Chase ────────────────────────────────────────────────────────
+static void updateGhostMode() {
+    uint32_t now = millis();
+    uint32_t dur = (globalMode == MODE_SCATTER) ? SCATTER_MS : CHASE_MS;
+    if (now - modeStartMs >= dur) {
+        globalMode  = (globalMode == MODE_SCATTER) ? MODE_CHASE : MODE_SCATTER;
+        modeStartMs = now;
+        // klassisch: bei Moduswechsel kehren normale Geister um
+        for (int i = 0; i < GHOST_COUNT; i++)
+            if (!ghosts[i].eaten && !ghosts[i].scared) ghosts[i].forceReverse = true;
+    }
+}
+
+// ─── Geist einen Schritt bewegen ─────────────────────────────────────────────
+static void stepGhost(int gi) {
+    Ghost &g = ghosts[gi];
+    int dx[4] = {-1, 1, 0, 0};
+    int dy[4] = { 0, 0,-1, 1};
+    int opp[4] = {PDIR_RIGHT, PDIR_LEFT, PDIR_DOWN, PDIR_UP};
+
+    // 1) Verängstigt: zufällige gültige Richtung (kein Rückwärts)
+    if (g.scared) {
+        PacDir choices[4]; int n = 0;
+        for (int d = 0; d < 4; d++) {
+            if (d == opp[g.dir]) continue;
+            int nx = g.x + dx[d], ny = g.y + dy[d];
+            if (!canMove(nx, ny)) continue;
+            choices[n++] = (PacDir)d;
+        }
+        if (n == 0) {
+            int d = opp[g.dir];
+            if (canMove(g.x + dx[d], g.y + dy[d])) { g.x += dx[d]; g.y += dy[d]; g.dir = (PacDir)d; }
+            return;
+        }
+        PacDir c = choices[random(n)];
+        g.x += dx[(int)c]; g.y += dy[(int)c]; g.dir = c;
         return;
     }
 
-    PacDir chosen = choices[0];
-    if (!g.scared) {
-        // 50%: Richtung wählen die Pacman nähert
-        int bestDist = 9999;
-        PacDir bestDir = choices[0];
-        for (int i = 0; i < nChoices; i++) {
-            int nx = g.x + dx[(int)choices[i]];
-            int ny = g.y + dy[(int)choices[i]];
-            int dist = abs(nx - pacX) + abs(ny - pacY);
-            if (dist < bestDist) { bestDist = dist; bestDir = choices[i]; }
-        }
-        chosen = (random(100) < 50) ? bestDir : choices[random(nChoices)];
-    } else {
-        // Scared: von Pacman wegbewegen
-        int worstDist = -1;
-        PacDir worstDir = choices[0];
-        for (int i = 0; i < nChoices; i++) {
-            int nx = g.x + dx[(int)choices[i]];
-            int ny = g.y + dy[(int)choices[i]];
-            int dist = abs(nx - pacX) + abs(ny - pacY);
-            if (dist > worstDist) { worstDist = dist; worstDir = choices[i]; }
-        }
-        chosen = (random(100) < 60) ? worstDir : choices[random(nChoices)];
+    // 2) Normal/Augen: Greedy zum Ziel; kein Rückwärts; Tie-Break UP,LEFT,DOWN,RIGHT
+    int tx, ty; ghostTarget(gi, tx, ty);
+    int order[4] = {PDIR_UP, PDIR_LEFT, PDIR_DOWN, PDIR_RIGHT};
+    int  bestD = -1;
+    long bestDist = 0x7fffffffL;
+    for (int k = 0; k < 4; k++) {
+        int d = order[k];
+        if (!g.forceReverse && d == opp[g.dir]) continue;
+        int nx = g.x + dx[d], ny = g.y + dy[d];
+        if (!canMove(nx, ny)) continue;
+        long dist = (long)(nx - tx) * (nx - tx) + (long)(ny - ty) * (ny - ty);
+        if (dist < bestDist) { bestDist = dist; bestD = d; }
     }
-
-    g.x += dx[(int)chosen];
-    g.y += dy[(int)chosen];
-    g.dir = chosen;
+    if (bestD < 0) {  // Sackgasse -> umkehren
+        int d = opp[g.dir];
+        if (canMove(g.x + dx[d], g.y + dy[d])) bestD = d;
+    }
+    g.forceReverse = false;
+    if (bestD >= 0) { g.x += dx[bestD]; g.y += dy[bestD]; g.dir = (PacDir)bestD; }
 }
 
-// ─── Spiellogik-Schritt ───────────────────────────────────────────────────────
-static void pacUpdate() {
-    if (pacState != PAC_PLAYING) return;
+// ─── Geschwindigkeit: zieht dieser Geist diesen Tick? ─────────────────────────
+static bool ghostMovesThisTick(int gi) {
+    if (ghosts[gi].eaten)  return true;              // Augen: schnell heim
+    if (ghosts[gi].scared) return (gameTick % 2) == 0;  // 50 % -> langsam, fangbar
+    return (gameTick % 4) != 0;                       // ~75 % -> etwas langsamer als Pacman
+}
 
-    // Richtungswunsch prüfen
+// ─── Pacman bewegen + Dots fressen ────────────────────────────────────────────
+static void movePacman() {
     int dx[4] = {-1, 1, 0, 0};
     int dy[4] = { 0, 0,-1, 1};
+
     int nx = pacX + dx[(int)pacNextDir];
     int ny = pacY + dy[(int)pacNextDir];
     if (canMove(nx, ny)) pacDir = pacNextDir;
 
-    // Pacman bewegen
     nx = pacX + dx[(int)pacDir];
     ny = pacY + dy[(int)pacDir];
     if (canMove(nx, ny)) { pacX = nx; pacY = ny; }
 
-    // Dot fressen
     if (dots[pacY][pacX]) {
         dots[pacY][pacX] = false;
         dotsEaten++;
         int pp = isPowerPellet(pacX, pacY);
         if (pp >= 0) {
             pacScore += 50;
+            ghostChain = 0;            // neue Verdopplungs-Kette
             for (int i = 0; i < GHOST_COUNT; i++)
-                if (!ghosts[i].eaten) ghosts[i].scared = true;
+                if (!ghosts[i].eaten) { ghosts[i].scared = true; ghosts[i].forceReverse = true; }
             anyScared   = true;
             scaredTimer = millis();
-            // Power-Pellet-Position deaktivieren
             powerPellets[pp][0] = -1;
             powerPellets[pp][1] = -1;
         } else {
             pacScore += 10;
         }
     }
+}
 
-    // Scared-Timeout (5 Sekunden)
-    if (anyScared && millis() - scaredTimer > 5000UL) {
-        for (int i = 0; i < GHOST_COUNT; i++) ghosts[i].scared = false;
-        anyScared = false;
-    }
-
-    // Geister bewegen
-    for (int i = 0; i < GHOST_COUNT; i++) {
-        // Eaten-Respawn nach 2 Sekunden
-        if (ghosts[i].eaten && millis() - ghosts[i].eatenTimer > 2000UL) {
-            ghosts[i].x = GHOST_HOME_X[i];
-            ghosts[i].y = GHOST_HOME_Y;
-            ghosts[i].eaten  = false;
-            ghosts[i].scared = false;
-        }
-        if (!ghosts[i].eaten) moveGhost(ghosts[i]);
-    }
-
-    // Kollision Pacman – Geist
+// ─── Kollision Pacman ↔ Geist ──────────────────────────────────────────────────
+static bool handleCollisions() {  // true = Game Over
     for (int i = 0; i < GHOST_COUNT; i++) {
         if (ghosts[i].eaten) continue;
         if (ghosts[i].x == pacX && ghosts[i].y == pacY) {
             if (ghosts[i].scared) {
-                // Pacman frisst Geist
                 ghosts[i].eaten  = true;
                 ghosts[i].scared = false;
                 ghosts[i].eatenTimer = millis();
-                pacScore += 200;
+                // klassische Verdopplung: 200, 400, 800, 1600 ...
+                ghostChain++;
+                pacScore += 200 * (1 << min(ghostChain - 1, 3));
             } else {
-                // Game Over
                 newHighscore = (pacScore > pacHighScore);
                 if (newHighscore) pacHighScore = pacScore;
                 pacState = PAC_GAMEOVER;
-                return;
+                return true;
             }
         }
     }
+    return false;
+}
 
-    // Gewonnen?
+// ─── Spiellogik-Schritt ───────────────────────────────────────────────────────
+static void pacUpdate() {
+    if (pacState != PAC_PLAYING) return;
+    gameTick++;
+
+    updateGhostMode();
+
+    if (anyScared && millis() - scaredTimer > FRIGHT_MS) {
+        for (int i = 0; i < GHOST_COUNT; i++) ghosts[i].scared = false;
+        anyScared = false;
+    }
+
+    // Pacman zieht jeden Tick
+    movePacman();
+    if (handleCollisions()) return;
+
     if (dotsEaten >= totalDots) {
         newHighscore = (pacScore > pacHighScore);
         if (newHighscore) pacHighScore = pacScore;
         pacState = PAC_WIN;
+        return;
     }
+
+    // Geister ziehen je nach Geschwindigkeit
+    for (int i = 0; i < GHOST_COUNT; i++) {
+        if (ghosts[i].eaten) {
+            bool home = (ghosts[i].x == GHOST_HOME_X[i] && ghosts[i].y == GHOST_HOME_Y);
+            if (home || millis() - ghosts[i].eatenTimer > 5000UL) {
+                ghosts[i].x = GHOST_HOME_X[i];
+                ghosts[i].y = GHOST_HOME_Y;
+                ghosts[i].eaten  = false;
+                ghosts[i].scared = false;
+                ghosts[i].dir = (i == 0) ? PDIR_RIGHT : PDIR_LEFT;
+                continue;
+            }
+        }
+        if (ghostMovesThisTick(i)) stepGhost(i);
+    }
+    handleCollisions();
 }
 
 // ─── Öffentliche Schnittstelle ────────────────────────────────────────────────
@@ -308,7 +370,7 @@ void taskPacmanLogic(void *pvParameters) {
         if (currentApp == APP_PACMAN && pacState == PAC_PLAYING) {
             pacUpdate();
         }
-        vTaskDelay(pdMS_TO_TICKS(150));
+        vTaskDelay(pdMS_TO_TICKS(LOGIC_TICK_MS));
     }
 }
 
@@ -371,11 +433,16 @@ void taskPacmanDisplay(void *pvParameters) {
             }
 
             // Geister
+            bool frightEnding = anyScared && (millis() - scaredTimer > FRIGHT_MS - 2000UL);
             for (int i = 0; i < GHOST_COUNT; i++) {
-                if (ghosts[i].eaten) continue;
+                if (ghosts[i].eaten) {
+                    setPixel(ghosts[i].x, ghosts[i].y, CRGB(40, 40, 70));  // Augen
+                    continue;
+                }
                 CRGB gc;
                 if (ghosts[i].scared) {
-                    gc = (blinkTick % 6 < 3) ? CRGB::Blue : CRGB(80,80,255);
+                    if (frightEnding) gc = (blinkTick % 4 < 2) ? CRGB::White : CRGB::Blue;
+                    else              gc = (blinkTick % 6 < 3) ? CRGB::Blue  : CRGB(80,80,255);
                 } else {
                     gc = GHOST_COLORS[i];
                 }

@@ -39,13 +39,14 @@ inline void pfDrawColon(int x, int y, CRGB c) {
     setPixel(x, y + 1, c);
     setPixel(x, y + 3, c);
 }
-// Zahl rechtsbündig in x=9..30 auf Zeile y
+// Zahl zentriert im Bereich x=9..30 auf Zeile y (bis zu 5 Stellen → max 99999).
+// Jede Ziffer ist 3px breit + 1px Abstand = 4px Raster; 5 Stellen = 19px passen.
 inline void pfDrawNumberRight(int y, int num, CRGB c) {
-    num = num < 0 ? 0 : (num > 999 ? 999 : num);
-    int d[3]; int n = 0;
-    if (num >= 100) d[n++] = num / 100;
-    if (n > 0 || num >= 10) d[n++] = (num / 10) % 10;
-    d[n++] = num % 10;
-    int sx = 9 + (21 - (n * 4 - 1)) / 2;
-    for (int i = 0; i < n; i++) pfDrawDigit(sx + i * 4, y, d[i], c);
+    if (num < 0)     num = 0;
+    if (num > 99999) num = 99999;
+    int d[5]; int n = 0;
+    do { d[n++] = num % 10; num /= 10; } while (num > 0 && n < 5);  // Einer zuerst
+    int w  = n * 4 - 1;            // Gesamtbreite in Pixeln
+    int sx = 9 + (22 - w) / 2;     // zentriert im 22px-Bereich (x=9..30)
+    for (int i = 0; i < n; i++) pfDrawDigit(sx + i * 4, y, d[n - 1 - i], c);
 }
