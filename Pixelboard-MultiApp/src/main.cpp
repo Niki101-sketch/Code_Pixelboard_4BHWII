@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <FastLED.h>
+#include <Preferences.h>
 #include <WiFi.h>
 #include <time.h>
 #include "soc/soc.h"            // Brownout-Detektor (Standalone-Betrieb am Netzteil)
@@ -28,6 +29,8 @@
 static const char* WIFI_SSID     = "iPhone von Paul";
 static const char* WIFI_PASSWORD = "rootroot";
 static const char* NTP_SERVER    = "pool.ntp.org";
+
+static Preferences mainPrefs;
 
 // ─── Shared LED-Arrays ────────────────────────────────────────────────────────
 CRGB ledsTop[256];
@@ -216,6 +219,7 @@ void taskManager(void *pvParameters) {
                 menuConfirm = false;
                 appMenuOpen = false;
                 currentApp  = menuSelectedApp;
+                mainPrefs.putInt("app", (int)currentApp);
                 // kurze Wisch-Animation
                 for (int x = 0; x < 32; x++) {
                     FastLED.clear();
@@ -307,6 +311,9 @@ void setup() {
     FastLED.setBrightness(25);
     FastLED.clear(true);
 
+    mainPrefs.begin("main", false);
+    currentApp = (AppID)constrain(mainPrefs.getInt("app", APP_SNAKE), 0, APP_COUNT - 1);
+
     startWiFi();
     snakeInit();
     wetterInit();
@@ -322,7 +329,7 @@ void setup() {
     xTaskCreatePinnedToCore(taskSnakeDisplay, "SnakeDsp", 4096, NULL, 1, &hSnakeDisplay, 0);
     xTaskCreatePinnedToCore(taskWetter,       "Wetter",   8192, NULL, 1, &hWetter,       0);
     xTaskCreatePinnedToCore(taskUhrzeit,      "Uhrzeit",  4096, NULL, 1, &hUhrzeit,      0);
-    xTaskCreatePinnedToCore(taskDHT22,        "DHT22",    4096, NULL, 1, &hDHT22,        0);
+    xTaskCreatePinnedToCore(taskDHT22,        "DHT22",   10240, NULL, 1, &hDHT22,        0);
     xTaskCreatePinnedToCore(taskPacmanDisplay,"PacDsp",   5120, NULL, 1, &hPacman,       0);
     xTaskCreatePinnedToCore(taskPongDisplay,  "PongDsp",  4096, NULL, 1, &hPong,         0);
 
@@ -332,12 +339,15 @@ void setup() {
     xTaskCreatePinnedToCore(taskManager,     "Manager",  3072, NULL, 2, NULL,         1);
     xTaskCreatePinnedToCore(taskInput,       "Input",    2048, NULL, 3, NULL,         1);
 
-    // Alles außer Snake suspended (Snake ist aktive Start-App)
+    // Alle Tasks suspendieren, dann nur die gespeicherte App aktivieren
+    vTaskSuspend(hSnakeLogic);
+    vTaskSuspend(hSnakeDisplay);
     vTaskSuspend(hWetter);
     vTaskSuspend(hUhrzeit);
     vTaskSuspend(hDHT22);
     vTaskSuspend(hPacman);
     vTaskSuspend(hPong);
+    resumeCurrentApp();
 }
 
 void loop() {}

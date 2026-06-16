@@ -45,11 +45,12 @@ static void resetBall(bool towardLeft) {
 // ─── Öffentliche Schnittstelle ────────────────────────────────────────────────
 void pongInit() {
     prefs.begin("pong", false);
-    highScore1 = prefs.getInt("hs1", 0);
-    highScore2 = prefs.getInt("hs2", 0);
-    pongState  = PONG_MENU;
-    score1     = 0;
-    score2     = 0;
+    highScore1  = prefs.getInt("hs1",  0);
+    highScore2  = prefs.getInt("hs2",  0);
+    pongMenuSel = constrain(prefs.getInt("mode", 0), 0, 1);
+    pongState   = PONG_MENU;
+    score1      = 0;
+    score2      = 0;
     resetBall(false);
 }
 
@@ -113,6 +114,7 @@ void taskPongDisplay(void *pvParameters) {
 
             if (inputPressed) {
                 inputPressed = false;
+                prefs.putInt("mode", pongMenuSel);
                 pongSolo     = (pongMenuSel == 0);
                 lastTick     = millis();
                 paddle1Y     = 6;

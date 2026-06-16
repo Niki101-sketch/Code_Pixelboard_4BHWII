@@ -88,7 +88,11 @@ static void runStartAnimation() {
 // ─── Öffentliche Schnittstelle ────────────────────────────────────────────────
 void snakeInit() {
     prefs.begin("snake", false);
-    highScore = prefs.getInt("hs", 0);
+    highScore          = prefs.getInt("hs",    0);
+    selectedSpeedLevel = prefs.getInt("speed", 2);
+    selectedFoodAmount = prefs.getInt("food",  1);
+    selectedWallWrap   = prefs.getInt("wrap",  0);
+    selectedColor      = prefs.getInt("color", 0);
     runStartAnimation();
 }
 
@@ -120,6 +124,10 @@ void snakeHandleInput(JoystickRichtung dir, bool pressed) {
             letzteMenueRichtung = dir;
         }
         if (pressed) {
+            prefs.putInt("speed", selectedSpeedLevel);
+            prefs.putInt("food",  selectedFoodAmount);
+            prefs.putInt("wrap",  selectedWallWrap);
+            prefs.putInt("color", selectedColor);
             game.setWallWrap(selectedWallWrap == 1);
             game.reset(selectedFoodAmount);
             nextDirection = DIR_RIGHT;

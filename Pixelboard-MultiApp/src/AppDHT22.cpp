@@ -1,5 +1,8 @@
 #include <FastLED.h>
 #include <DHT.h>
+#include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <HTTPClient.h>
 #include <LEDMatrix.h>
 #include <LEDText.h>
 #include <FontMatrise.h>
@@ -8,6 +11,10 @@
 
 #define DHT_PIN  4
 #define DHT_TYPE DHT22
+
+// Google Apps Script Web-App URL (nach Deployment hier eintragen):
+static const char* SHEETS_URL =
+    "https://script.google.com/macros/s/AKfycbwaQoXrmZn4eOADaosEKhw6SCLL6M0aimvRI8uHy1WfsZHXFhRugKrn7vfUOmeUsxMH/exec";
 
 static DHT dht(DHT_PIN, DHT_TYPE);
 
@@ -69,6 +76,26 @@ static void sensorLesen() {
     lastTempDisplayed = -999.0f;  // Farbupdate erzwingen
 }
 
+// ─── Google Sheets Upload ────────────────────────────────────────────────────
+static void sendToSheets() {
+    if (!wifiOK || WiFi.status() != WL_CONNECTED) return;
+    if (isnan(dhtTemp) || isnan(dhtHum)) return;
+
+    char url[256];
+    snprintf(url, sizeof(url), "%s?temp=%.1f&hum=%.0f",
+             SHEETS_URL, dhtTemp, dhtHum);
+
+    WiFiClientSecure client;
+    client.setInsecure();
+
+    HTTPClient http;
+    http.begin(client, url);
+    http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
+    http.setTimeout(8000);
+    http.GET();
+    http.end();
+}
+
 // ─── Display zusammenbauen ───────────────────────────────────────────────────
 static void assembleCanvas16() {
     for (uint8_t y = 0; y < 8; y++)
@@ -121,16 +148,22 @@ void dht22Init() {
 
 // ─── Task ─────────────────────────────────────────────────────────────────────
 void taskDHT22(void *pvParameters) {
-    unsigned long lastRead = 0;
+    unsigned long lastRead   = 0;
+    unsigned long lastUpload = 0;
 
     while (1) {
         if (currentApp != APP_DHT22) { vTaskDelay(pdMS_TO_TICKS(50)); continue; }
 
         updateDHT22Display();
 
-        if (millis() - lastRead >= 2000UL) {
+        unsigned long now = millis();
+        if (now - lastRead >= 2000UL) {
             sensorLesen();
-            lastRead = millis();
+            lastRead = now;
+        }
+        if (now - lastUpload >= 60000UL) {
+            sendToSheets();
+            lastUpload = now;
         }
 
         vTaskDelay(pdMS_TO_TICKS(50));
