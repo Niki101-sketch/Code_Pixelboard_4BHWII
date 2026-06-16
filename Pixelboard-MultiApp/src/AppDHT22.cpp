@@ -90,9 +90,6 @@ static void updateDHT22Display() {
     tempText.SetText((unsigned char*)tempBuffer, strlen(tempBuffer));
     tempText.UpdateText();
 
-    CRGB iconColor = isnan(dhtTemp) ? CRGB(0, 150, 255) : getTempColor(dhtTemp);
-    drawThermoIcon(iconColor);
-
     if (scrollText.UpdateText() == -1) {
         scrollText.SetText((unsigned char*)scrollBuffer, strlen(scrollBuffer));
     }
@@ -111,11 +108,11 @@ void dht22Init() {
     canvas16.SetLEDArray(canvas16Leds);
 
     tempText.SetFont(MatriseFontData);
-    tempText.Init(&canvas8Top, 24, 8, 0, 0);
+    tempText.Init(&canvas8Top, 32, 8, 0, 0);
     tempText.SetTextColrOptions(COLR_RGB | COLR_SINGLE, 255, 80, 0);
 
     scrollText.SetFont(MatriseFontData);
-    scrollText.Init(&canvas8Bottom, 64, 8, 0, 0);
+    scrollText.Init(&canvas8Bottom, 32, 8, 0, 0);
     scrollText.SetScrollDirection(SCROLL_LEFT);
     scrollText.SetTextColrOptions(COLR_RGB | COLR_SINGLE, 0, 200, 255);
 

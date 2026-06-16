@@ -23,6 +23,11 @@ static volatile int score1 = 0, score2 = 0;
 static int    highScore1 = 0, highScore2 = 0;
 static int    winPlayer  = 1;
 
+// ─── Modus ────────────────────────────────────────────────────────────────────
+static int  pongMenuSel  = 0;   // 0 = 1P, 1 = 2P
+static bool pongSolo     = false;
+static int  pongNavDelay = 0;   // Entprellung Menünavigation (Frames)
+
 // ─── Input (aus taskInput, vom Display-Task gelesen) ──────────────────────────
 static volatile JoystickRichtung inp1 = NEUTRAL;
 static volatile JoystickRichtung inp2 = NEUTRAL;
@@ -49,12 +54,13 @@ void pongInit() {
 }
 
 void pongResetToMenu() {
-    score1       = 0;
-    score2       = 0;
-    pongState    = PONG_MENU;
-    inp1         = NEUTRAL;
-    inp2         = NEUTRAL;
-    inputPressed = false;
+    score1        = 0;
+    score2        = 0;
+    pongState     = PONG_MENU;
+    inp1          = NEUTRAL;
+    inp2          = NEUTRAL;
+    inputPressed  = false;
+    pongNavDelay  = 0;
     resetBall(false);
 }
 
@@ -77,29 +83,37 @@ void taskPongDisplay(void *pvParameters) {
 
         // ── MENU ──────────────────────────────────────────────────────────────
         if (pongState == PONG_MENU) {
-            // "PONG" zentriert, 4 Zeichen × 4px = 19px → x=7..25
-            pfDrawChar(7,  3, PF_P, CRGB::White);
-            pfDrawDigit(11, 3, 0,   CRGB::White);  // O = Ziffer 0
-            pfDrawChar(15, 3, PF_N, CRGB::White);
-            pfDrawChar(19, 3, PF_G, CRGB::White);
+            // "PONG" zentriert oben (y=0)
+            pfDrawChar(7,  0, PF_P, CRGB::White);
+            pfDrawDigit(11, 0, 0,   CRGB::White);  // O = Ziffer 0
+            pfDrawChar(15, 0, PF_N, CRGB::White);
+            pfDrawChar(19, 0, PF_G, CRGB::White);
 
-            // Highscores: "1:X" links grün, "2:X" rechts blau
-            pfDrawDigit(1,  9, 1, CRGB(0, 180, 0));
-            pfDrawColon(5,  9, CRGB(0, 180, 0));
-            pfDrawDigit(7,  9, highScore1 % 10, CRGB(0, 180, 0));
+            // Moduswahl: "1P" links, "2P" rechts
+            CRGB c1p = (pongMenuSel == 0) ? CRGB::White  : CRGB(60, 60, 60);
+            CRGB c2p = (pongMenuSel == 1) ? CRGB::White  : CRGB(60, 60, 60);
+            pfDrawDigit(5,  6, 1, c1p);
+            pfDrawChar( 9,  6, PF_P, c1p);
+            pfDrawDigit(19, 6, 2, c2p);
+            pfDrawChar( 23, 6, PF_P, c2p);
 
-            pfDrawDigit(17, 9, 2, CRGB(0, 80, 255));
-            pfDrawColon(21, 9, CRGB(0, 80, 255));
-            pfDrawDigit(23, 9, highScore2 % 10, CRGB(0, 80, 255));
-
-            // Blinkendes Startzeichen
+            // Blinkender Indikatorpunkt unter ausgewähltem Modus
             if (blinkTick % 20 < 10) {
-                setPixel(15, 14, CRGB::White);
-                setPixel(16, 14, CRGB::White);
+                int dotX = (pongMenuSel == 0) ? 7 : 21;
+                setPixel(dotX, 12, CRGB::White);
+            }
+
+            // Entprellte Links/Rechts-Navigation
+            JoystickRichtung menuDir = (inp1 != NEUTRAL) ? inp1 : inp2;
+            if (pongNavDelay > 0) pongNavDelay--;
+            if (pongNavDelay == 0) {
+                if (menuDir == LINKS  && pongMenuSel > 0) { pongMenuSel--; pongNavDelay = 8; }
+                if (menuDir == RECHTS && pongMenuSel < 1) { pongMenuSel++; pongNavDelay = 8; }
             }
 
             if (inputPressed) {
                 inputPressed = false;
+                pongSolo     = (pongMenuSel == 0);
                 lastTick     = millis();
                 paddle1Y     = 6;
                 paddle2Y     = 6;
@@ -110,11 +124,17 @@ void taskPongDisplay(void *pvParameters) {
 
         // ── PLAYING ───────────────────────────────────────────────────────────
         else if (pongState == PONG_PLAYING) {
-            // Paddle-Bewegung (jeder Frame = 33ms)
-            if (inp1 == OBEN  && paddle1Y > 0)             paddle1Y--;
-            if (inp1 == UNTEN && paddle1Y < 16 - PADDLE_H) paddle1Y++;
-            if (inp2 == OBEN  && paddle2Y > 0)             paddle2Y--;
-            if (inp2 == UNTEN && paddle2Y < 16 - PADDLE_H) paddle2Y++;
+            // Paddle 1 (links): Spieler — im Solo-Modus beide Joysticks erlaubt
+            JoystickRichtung humanDir = (inp1 != NEUTRAL) ? inp1 : inp2;
+            if (!pongSolo) humanDir = inp1;
+            if (humanDir == OBEN  && paddle1Y > 0)             paddle1Y--;
+            if (humanDir == UNTEN && paddle1Y < 16 - PADDLE_H) paddle1Y++;
+
+            // Paddle 2 (rechts): Spieler 2 nur im 2P-Modus
+            if (!pongSolo) {
+                if (inp2 == OBEN  && paddle2Y > 0)             paddle2Y--;
+                if (inp2 == UNTEN && paddle2Y < 16 - PADDLE_H) paddle2Y++;
+            }
 
             // Ball-Schritt alle TICK_MS
             unsigned long now = millis();
@@ -162,6 +182,13 @@ void taskPongDisplay(void *pvParameters) {
                         if (score1 >= MAX_SCORE) { winPlayer = 1; pongState = PONG_WIN_FLASH; }
                         else                       resetBall(false);
                     }
+                }
+
+                // KI-Paddle (nur Solo-Modus, mit Ball-Takt → schlagbar)
+                if (pongSolo) {
+                    int aiCenter = paddle2Y + PADDLE_H / 2;
+                    if ((int)roundf(ballY) < aiCenter && paddle2Y > 0)             paddle2Y--;
+                    if ((int)roundf(ballY) > aiCenter && paddle2Y < 16 - PADDLE_H) paddle2Y++;
                 }
             }
 
@@ -211,12 +238,20 @@ void taskPongDisplay(void *pvParameters) {
         else if (pongState == PONG_WIN_SHOW) {
             CRGB wc = (winPlayer == 1) ? CRGB::Green : CRGB(0, 80, 255);
 
-            // "P1 WIN" oder "P2 WIN"
-            pfDrawChar(3,  2, PF_P, wc);
-            pfDrawDigit(7,  2, winPlayer, wc);
-            pfDrawChar(13, 2, PF_W, wc);
-            pfDrawChar(17, 2, PF_I, wc);
-            pfDrawChar(21, 2, PF_N, wc);
+            // "P1 WIN" / "P2 WIN" oder "AI WIN" im Solo-Modus
+            if (pongSolo && winPlayer == 2) {
+                pfDrawChar(3,  2, PF_A, wc);
+                pfDrawChar(7,  2, PF_I, wc);
+                pfDrawChar(13, 2, PF_W, wc);
+                pfDrawChar(17, 2, PF_I, wc);
+                pfDrawChar(21, 2, PF_N, wc);
+            } else {
+                pfDrawChar(3,  2, PF_P, wc);
+                pfDrawDigit(7,  2, winPlayer, wc);
+                pfDrawChar(13, 2, PF_W, wc);
+                pfDrawChar(17, 2, PF_I, wc);
+                pfDrawChar(21, 2, PF_N, wc);
+            }
 
             // Endstand
             pfDrawDigit(10, 9, score1, CRGB(0, 150, 0));

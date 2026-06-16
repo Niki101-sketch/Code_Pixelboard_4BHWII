@@ -24,6 +24,8 @@ static const uint8_t PF_W[5] = {5,5,7,7,5};
 static const uint8_t PF_T[5] = {7,2,2,2,2};
 static const uint8_t PF_U[5] = {5,5,5,5,7};
 static const uint8_t PF_R[5] = {6,5,6,5,5};
+static const uint8_t PF_G[5] = {7,4,5,5,7};
+static const uint8_t PF_I[5] = {7,2,2,2,7};
 
 inline void pfDrawChar(int x, int y, const uint8_t p[5], CRGB c) {
     for (int r = 0; r < 5; r++) {

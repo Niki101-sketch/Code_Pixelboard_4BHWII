@@ -12,6 +12,7 @@
 #include "AppUhrzeit.h"
 #include "AppDHT22.h"
 #include "AppPacman.h"
+#include "AppPong.h"
 
 // ─── Hardware ─────────────────────────────────────────────────────────────────
 #define PIN_TOP    25
@@ -50,6 +51,8 @@ volatile bool  appMenuOpen      = false;
 volatile AppID menuSelectedApp  = APP_SNAKE;
 volatile bool  menuNavLeft      = false;
 volatile bool  menuNavRight     = false;
+volatile bool  menuNavUp        = false;
+volatile bool  menuNavDown      = false;
 volatile bool  menuConfirm      = false;
 
 // ─── Task-Handles ─────────────────────────────────────────────────────────────
@@ -59,6 +62,7 @@ TaskHandle_t hWetter       = NULL;
 TaskHandle_t hUhrzeit      = NULL;
 TaskHandle_t hDHT22        = NULL;
 TaskHandle_t hPacman       = NULL;
+TaskHandle_t hPong         = NULL;
 
 // ─── LED-Mapping (32×16) ──────────────────────────────────────────────────────
 static int indexTop(int x, int y) {
@@ -96,6 +100,9 @@ static void suspendCurrentApp() {
         case APP_PACMAN:
             if (hPacman) vTaskSuspend(hPacman);
             break;
+        case APP_PONG:
+            if (hPong) vTaskSuspend(hPong);
+            break;
         default: break;
     }
     if (ledMutex) xSemaphoreGive(ledMutex);
@@ -121,6 +128,10 @@ static void resumeCurrentApp() {
             pacmanResetToMenu();
             if (hPacman) vTaskResume(hPacman);
             break;
+        case APP_PONG:
+            pongResetToMenu();
+            if (hPong) vTaskResume(hPong);
+            break;
         default: break;
     }
 }
@@ -132,54 +143,72 @@ static const uint8_t ICON_WETTER[5] = {0x04,0x0E,0x1F,0x0E,0x04}; // Sonne
 static const uint8_t ICON_UHR[5]    = {0x0E,0x15,0x17,0x11,0x0E}; // Uhr
 static const uint8_t ICON_DHT22[5]  = {0x06,0x09,0x09,0x0F,0x0F}; // Thermometer
 static const uint8_t ICON_PACMAN[5] = {0x0E,0x1C,0x18,0x1C,0x0E}; // Pacman-Mund
+static const uint8_t ICON_PONG[5]   = {0x11,0x11,0x15,0x11,0x11}; // Zwei Paddles + Ball
 
 static const uint8_t* APP_ICONS[APP_COUNT] = {
-    ICON_SNAKE, ICON_WETTER, ICON_UHR, ICON_DHT22, ICON_PACMAN
+    ICON_SNAKE, ICON_WETTER, ICON_UHR, ICON_DHT22, ICON_PACMAN, ICON_PONG
 };
 static const CRGB APP_COLORS[APP_COUNT] = {
-    CRGB::Green, CRGB::Yellow, CRGB::White, CRGB::Cyan, CHSV(43,255,255)
+    CRGB::Green, CRGB::Yellow, CRGB::White, CRGB::Cyan, CHSV(43,255,255), CRGB::Magenta
 };
-// Icon-X-Positionen (je 5px breit, 1px Abstand, zentriert)
-static const int ICON_X[5] = {1, 7, 13, 19, 25};
-static const int ICON_Y     = 4;
+
+// 2×3 Grid: Zeile 0 = Info-Apps, Zeile 1 = Spiele
+static const AppID MENU_GRID[2][3] = {
+    { APP_WETTER, APP_UHRZEIT, APP_DHT22 },
+    { APP_SNAKE,  APP_PONG,    APP_PACMAN }
+};
+static const int ICON_COL_X[3] = { 3, 13, 23 };  // x-Start je Spalte
+static const int ICON_ROW_Y[2] = { 1,  9 };       // y-Start je Zeile
+static const int DOT_ROW_Y[2]  = { 7, 15 };       // Indikatorpunkt je Zeile
 
 static void drawAppMenu() {
     FastLED.clear();
-    for (int i = 0; i < APP_COUNT; i++) {
-        bool sel = (i == (int)menuSelectedApp);
-        CRGB c   = sel ? APP_COLORS[i] : CRGB(APP_COLORS[i].r/4, APP_COLORS[i].g/4, APP_COLORS[i].b/4);
-        for (int row = 0; row < 5; row++) {
-            uint8_t bits = APP_ICONS[i][row];
-            for (int col = 0; col < 5; col++) {
-                if (bits & (1 << (4 - col))) setPixel(ICON_X[i] + col, ICON_Y + row, c);
+    // Trennlinie zwischen Info- und Spiele-Zeile
+    for (int x = 0; x < 32; x++) setPixel(x, 8, CRGB(15, 15, 15));
+
+    for (int row = 0; row < 2; row++) {
+        for (int col = 0; col < 3; col++) {
+            AppID app = MENU_GRID[row][col];
+            bool  sel = (app == menuSelectedApp);
+            CRGB  c   = sel ? APP_COLORS[app]
+                            : CRGB(APP_COLORS[app].r/4, APP_COLORS[app].g/4, APP_COLORS[app].b/4);
+            int ix = ICON_COL_X[col];
+            int iy = ICON_ROW_Y[row];
+            for (int r = 0; r < 5; r++) {
+                uint8_t bits = APP_ICONS[app][r];
+                for (int c2 = 0; c2 < 5; c2++) {
+                    if (bits & (1 << (4 - c2))) setPixel(ix + c2, iy + r, c);
+                }
             }
+            if (sel) setPixel(ix + 2, DOT_ROW_Y[row], APP_COLORS[app]);
         }
-        // Indikator-Punkt unter ausgewähltem Icon
-        if (sel) setPixel(ICON_X[i] + 2, ICON_Y + 6, APP_COLORS[i]);
     }
 }
 
 // ─── taskManager ─────────────────────────────────────────────────────────────
 void taskManager(void *pvParameters) {
+    static int menuRow = 0;
+    static int menuCol = 0;
+
     while (1) {
         // Menü öffnen
         if (appWechselAngefordert && !appMenuOpen) {
             appWechselAngefordert = false;
             suspendCurrentApp();
+            // Cursor auf aktuelle App setzen
             menuSelectedApp = currentApp;
-            appMenuOpen     = true;
+            for (int r = 0; r < 2; r++)
+                for (int c = 0; c < 3; c++)
+                    if (MENU_GRID[r][c] == currentApp) { menuRow = r; menuCol = c; }
+            appMenuOpen = true;
         }
 
         // Menü bedienen
         if (appMenuOpen) {
-            if (menuNavLeft) {
-                menuNavLeft = false;
-                menuSelectedApp = (AppID)(((int)menuSelectedApp - 1 + APP_COUNT) % APP_COUNT);
-            }
-            if (menuNavRight) {
-                menuNavRight = false;
-                menuSelectedApp = (AppID)(((int)menuSelectedApp + 1) % APP_COUNT);
-            }
+            if (menuNavLeft)  { menuNavLeft  = false; menuCol = (menuCol + 2) % 3; menuSelectedApp = MENU_GRID[menuRow][menuCol]; }
+            if (menuNavRight) { menuNavRight = false; menuCol = (menuCol + 1) % 3; menuSelectedApp = MENU_GRID[menuRow][menuCol]; }
+            if (menuNavUp)    { menuNavUp    = false; menuRow = 0;                  menuSelectedApp = MENU_GRID[menuRow][menuCol]; }
+            if (menuNavDown)  { menuNavDown  = false; menuRow = 1;                  menuSelectedApp = MENU_GRID[menuRow][menuCol]; }
             drawAppMenu();
             showLeds();
 
@@ -228,6 +257,8 @@ void taskInput(void *pvParameters) {
             if (dir != lastMenuDir) {
                 if (dir == LINKS)  menuNavLeft  = true;
                 if (dir == RECHTS) menuNavRight = true;
+                if (dir == OBEN)   menuNavUp    = true;
+                if (dir == UNTEN)  menuNavDown  = true;
                 lastMenuDir = dir;
             }
             if (dir == NEUTRAL) lastMenuDir = NEUTRAL;
@@ -236,6 +267,7 @@ void taskInput(void *pvParameters) {
             // Normaler App-Input
             if (currentApp == APP_SNAKE)  snakeHandleInput(dir, pressed);
             if (currentApp == APP_PACMAN) pacmanHandleInput(dir, pressed);
+            if (currentApp == APP_PONG)   pongHandleInput(joy.getRichtung(), joy2.getRichtung(), pressed);
             // Wetter, Uhrzeit, DHT22 brauchen keinen Input
 
             if (lang1 || lang2) appWechselAngefordert = true;
@@ -281,6 +313,7 @@ void setup() {
     uhrzeitInit();
     dht22Init();
     pacmanInit();
+    pongInit();
 
     // WLAN/NTP im Hintergrund verbinden (blockiert den Start nicht)
     xTaskCreatePinnedToCore(taskWiFi, "WiFi", 4096, NULL, 1, NULL, 0);
@@ -291,6 +324,7 @@ void setup() {
     xTaskCreatePinnedToCore(taskUhrzeit,      "Uhrzeit",  4096, NULL, 1, &hUhrzeit,      0);
     xTaskCreatePinnedToCore(taskDHT22,        "DHT22",    4096, NULL, 1, &hDHT22,        0);
     xTaskCreatePinnedToCore(taskPacmanDisplay,"PacDsp",   5120, NULL, 1, &hPacman,       0);
+    xTaskCreatePinnedToCore(taskPongDisplay,  "PongDsp",  4096, NULL, 1, &hPong,         0);
 
     // Core 1: Logik-Tasks
     xTaskCreatePinnedToCore(taskSnakeLogic,  "SnakeLog", 3072, NULL, 2, &hSnakeLogic, 1);
@@ -303,6 +337,7 @@ void setup() {
     vTaskSuspend(hUhrzeit);
     vTaskSuspend(hDHT22);
     vTaskSuspend(hPacman);
+    vTaskSuspend(hPong);
 }
 
 void loop() {}
